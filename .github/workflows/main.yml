@@ -1,49 +1,27 @@
-name: Upload Endpoint
+name: Direct HTTP Test
 
 on:
   workflow_dispatch:
 
 jobs:
-  upload-endpoint:
+  direct-http:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install deps
+      - name: Create index page
         run: |
-          sudo apt update
-          sudo apt install -y nodejs npm
+          echo "<h1>HELLO FROM GITHUB ACTIONS</h1>" > index.html
 
-      - name: Create upload server
+      - name: Start HTTP server
         run: |
-          cat << 'EOF' > server.js
-          const express = require("express");
-          const multer = require("multer");
-          const upload = multer({ dest: "uploads/" });
+          nohup python3 -m http.server 8080 >/dev/null 2>&1 &
+          echo "Server started on port 8080"
 
-          const app = express();
-          app.post("/upload", upload.single("file"), (req, res) => {
-            console.log("Uploaded:", req.file.originalname, "->", req.file.path);
-            res.send("OK");
-          });
-
-          app.get("/", (req, res) => res.send("Upload endpoint ready"));
-          app.listen(3000, () => console.log("Server started on 3000"));
-          EOF
-
-          npm init -y
-          npm install express multer
-
-      - name: Start server
+      - name: Print public IP
         run: |
-          mkdir -p uploads
-          node server.js &
-
-      - name: Download Cloudflared
-        run: |
-          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-          sudo dpkg -i cloudflared-linux-amd64.deb
-
-      - name: Start public tunnel
-        run: |
-          echo "Creating public tunnel..."
-          cloudflared tunnel --url http://localhost:3000 --no-autoupdate
+          echo "Public IP of runner:"
+          curl -s ifconfig.me || true
+          hostname -I || true
+          echo "TRY accessing: http://<above-ip>:8080"
+          echo "It will NOT open. Inbound ports are blocked by GitHub."
+          sleep 999999
