@@ -1,17 +1,49 @@
-name: SSH Debug Session
+name: Upload Endpoint
 
 on:
-  workflow_dispatch:  # start manually
+  workflow_dispatch:
 
 jobs:
-  debug:
+  upload-endpoint:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Start tmate session
-        uses: mxschmitt/action-tmate@v3
-        # with:
-        #   limit-access-to-actor: true   # only your GitHub account can open it
+      - name: Install deps
+        run: |
+          sudo apt update
+          sudo apt install -y nodejs npm
 
-      - name: Keep alive
-        run: sleep 999999
+      - name: Create upload server
+        run: |
+          cat << 'EOF' > server.js
+          const express = require("express");
+          const multer = require("multer");
+          const upload = multer({ dest: "uploads/" });
+
+          const app = express();
+          app.post("/upload", upload.single("file"), (req, res) => {
+            console.log("Uploaded:", req.file.originalname, "->", req.file.path);
+            res.send("OK");
+          });
+
+          app.get("/", (req, res) => res.send("Upload endpoint ready"));
+          app.listen(3000, () => console.log("Server started on 3000"));
+          EOF
+
+          npm init -y
+          npm install express multer
+
+      - name: Start server
+        run: |
+          mkdir -p uploads
+          node server.js &
+
+      - name: Download Cloudflared
+        run: |
+          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+
+      - name: Start public tunnel
+        run: |
+          echo "Creating public tunnel..."
+          cloudflared tunnel --url http://localhost:3000 --no-autoupdate
